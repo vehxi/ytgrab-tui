@@ -20,7 +20,7 @@ Screen {
     max-width: 120;
     height: 100%;
     background: $k-canvas;
-    align-horizontal: center;
+    align: center middle;
     scrollbar-size: 1 1;
     scrollbar-color: $k-line;
     scrollbar-background: $k-canvas;

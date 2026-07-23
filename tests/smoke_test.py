@@ -113,17 +113,23 @@ async def smoke_test() -> None:
 
     app = YtgrabApp()
     async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
         assert app.theme == "ytgrab-dark"
         assert app.current_theme.dark
         assert app.query_one("#source-window", Vertical).display
         assert not app.query_one("#result-window", Vertical).display
         assert not app.query_one("#auth-row", Horizontal).display
         assert not app.screen.has_class("narrow")
+        hero = app.query_one("#hero", Horizontal)
+        source = app.query_one("#source-window", Vertical)
+        url = app.query_one("#url", Input)
+        inspect = app.query_one("#inspect", Button)
+        assert abs(hero.region.x + hero.region.width / 2 - app.size.width / 2) <= 0.5
+        assert abs(source.region.x + source.region.width / 2 - app.size.width / 2) <= 0.5
+        assert abs(hero.region.y - (app.size.height - source.region.bottom)) <= 1
         app.set_logo_scanning(True)
         app.animate_logo()
         app.set_logo_scanning(False)
-        url = app.query_one("#url", Input)
-        inspect = app.query_one("#inspect", Button)
         assert inspect.disabled
 
         url.value = "https://youtu.be/dQw4w9WgXcQ"
@@ -164,6 +170,13 @@ async def smoke_test() -> None:
         await pilot.pause()
         assert compact_app.screen.has_class("narrow")
         assert compact_app.screen.has_class("compact")
+        compact_hero = compact_app.query_one("#hero", Horizontal)
+        compact_source = compact_app.query_one("#source-window", Vertical)
+        assert abs(compact_hero.region.x + compact_hero.region.width / 2 - 30) <= 0.5
+        assert abs(compact_source.region.x + compact_source.region.width / 2 - 30) <= 0.5
+        assert abs(
+            compact_hero.region.y - (compact_app.size.height - compact_source.region.bottom)
+        ) <= 1
 
 
 if __name__ == "__main__":

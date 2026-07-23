@@ -43,10 +43,10 @@ block characters.
 
 ## 5. Layout Principles
 
-The working area is centered and capped at 104 columns. The masthead groups the
-mark, purpose, and local status. Source and result are mutually exclusive views:
-the user always sees one decision at a time. Empty space is structural and is
-not filled with generic cards.
+The working area is centered on both terminal axes and capped at 104 columns.
+The masthead groups the mark, purpose, and local status. Source and result are
+mutually exclusive views: the user always sees one decision at a time. Empty
+space is structural and is not filled with generic cards.
 
 ## 6. Depth and Elevation
 
