@@ -1,10 +1,10 @@
-# MUXRAIL
+# muxrail
 
-MUXRAIL is a keyboard-friendly terminal interface for inspecting and downloading
+muxrail is a keyboard-friendly terminal interface for inspecting and downloading
 YouTube videos with [`yt-dlp`](https://github.com/yt-dlp/yt-dlp). It keeps the
 workflow focused: paste a link, choose a format, and save the result locally.
 
-![MUXRAIL start screen](artifacts/muxrail-start.png)
+![muxrail start screen](artifacts/muxrail-start.png)
 
 ## Features
 
@@ -37,7 +37,7 @@ winget install Gyan.FFmpeg
 
 ## Install
 
-[`pipx`](https://pipx.pypa.io/) is recommended because it installs MUXRAIL in an
+[`pipx`](https://pipx.pypa.io/) is recommended because it installs muxrail in an
 isolated environment while making the `muxrail` command available everywhere.
 
 Download or clone this repository, open a terminal in its directory, and run:
@@ -103,12 +103,12 @@ software encoders on Linux and Windows. H.264 is used up to 1080p and HEVC for
 
 ## Privacy
 
-MUXRAIL has no analytics, accounts, telemetry, or remote backend of its own.
+muxrail has no analytics, accounts, telemetry, or remote backend of its own.
 Video URLs are passed directly to YouTube through `yt-dlp`, and downloaded files
 stay in the folder you choose.
 
 When browser authentication is enabled, `yt-dlp` reads cookies from the selected
-browser at runtime. MUXRAIL does not copy cookies into the project or save them in
+browser at runtime. muxrail does not copy cookies into the project or save them in
 its settings. It stores only the selected browser name in the standard per-user
 configuration directory:
 
