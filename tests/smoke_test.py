@@ -4,8 +4,8 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-from ytdl_tui.app import (
-    YtgrabApp,
+from muxrail.app import (
+    MuxRailApp,
     browser_cookie_args,
     build_download_command,
     build_inspect_command,
@@ -55,13 +55,13 @@ async def smoke_test() -> None:
     assert media_is_mac_compatible("hevc", "aac")
     assert not media_is_mac_compatible("vp9", "opus")
 
-    snapshot = parse_progress_line("YTGRAB_PROGRESS: 42.5%| 8.2MiB/s|00:13")
+    snapshot = parse_progress_line("MUXRAIL_PROGRESS: 42.5%| 8.2MiB/s|00:13")
     assert snapshot is not None
     assert snapshot.percent == 42.5
     assert snapshot.speed == "8.2MiB/s"
     assert snapshot.eta == "00:13"
     escaped_snapshot = parse_progress_line(
-        "\r\x1b[KYTGRAB_PROGRESS: 17.0%| 1.0MiB/s|00:42"
+        "\r\x1b[KMUXRAIL_PROGRESS: 17.0%| 1.0MiB/s|00:42"
     )
     assert escaped_snapshot is not None
     assert escaped_snapshot.percent == 17.0
@@ -79,7 +79,7 @@ async def smoke_test() -> None:
         "[h264_videotoolbox] Cannot create compression session"
     )
 
-    with tempfile.TemporaryDirectory(prefix="ytgrab-smoke-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="muxrail-smoke-") as temporary:
         temporary_dir = Path(temporary)
         settings_file = temporary_dir / "settings.json"
         save_cookie_browser("firefox", settings_file)
@@ -143,10 +143,10 @@ async def smoke_test() -> None:
     assert "mp3" in audio_command
     assert "[audio]" in audio_command[audio_command.index("-o") + 1]
 
-    app = YtgrabApp()
+    app = MuxRailApp()
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
-        assert app.theme == "ytgrab-dark"
+        assert app.theme == "muxrail-dark"
         assert app.current_theme.dark
         assert app.query_one("#source-window", Vertical).display
         assert not app.query_one("#result-window", Vertical).display
@@ -167,14 +167,14 @@ async def smoke_test() -> None:
         url.value = "https://youtu.be/dQw4w9WgXcQ"
         await pilot.pause()
         with patch(
-            "ytdl_tui.app.asyncio.create_subprocess_exec",
+            "muxrail.app.asyncio.create_subprocess_exec",
             side_effect=OSError("resource unavailable"),
         ):
             worker = app.inspect_video(url.value)
             await worker.wait()
         assert not inspect.disabled
         with patch(
-            "ytdl_tui.app.build_inspect_command",
+            "muxrail.app.build_inspect_command",
             return_value=[sys.executable, "-c", "import time; time.sleep(30)"],
         ):
             worker = app.inspect_video(url.value)
@@ -222,7 +222,7 @@ async def smoke_test() -> None:
         await pilot.pause()
         assert inspect.disabled
 
-    compact_app = YtgrabApp()
+    compact_app = MuxRailApp()
     async with compact_app.run_test(size=(60, 40)) as pilot:
         await pilot.pause()
         assert compact_app.screen.has_class("narrow")

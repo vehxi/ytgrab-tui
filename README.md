@@ -1,10 +1,10 @@
-# YTGRAB
+# MUXRAIL
 
-YTGRAB is a keyboard-friendly terminal interface for inspecting and downloading
+MUXRAIL is a keyboard-friendly terminal interface for inspecting and downloading
 YouTube videos with [`yt-dlp`](https://github.com/yt-dlp/yt-dlp). It keeps the
 workflow focused: paste a link, choose a format, and save the result locally.
 
-![YTGRAB start screen](artifacts/ytgrab-start.png)
+![MUXRAIL start screen](artifacts/muxrail-start.png)
 
 ## Features
 
@@ -37,14 +37,14 @@ winget install Gyan.FFmpeg
 
 ## Install
 
-[`pipx`](https://pipx.pypa.io/) is recommended because it installs YTGRAB in an
-isolated environment while making the `ytgrab` command available everywhere.
+[`pipx`](https://pipx.pypa.io/) is recommended because it installs MUXRAIL in an
+isolated environment while making the `muxrail` command available everywhere.
 
 Download or clone this repository, open a terminal in its directory, and run:
 
 ```bash
 pipx install .
-ytgrab
+muxrail
 ```
 
 If `pipx` is not installed yet, use the appropriate command:
@@ -63,7 +63,7 @@ py -m pip install --user pipx
 py -m pipx ensurepath
 ```
 
-Restart the terminal after `ensurepath` if the `ytgrab` command is not found.
+Restart the terminal after `ensurepath` if the `muxrail` command is not found.
 
 ### Development install
 
@@ -71,7 +71,7 @@ Restart the terminal after `ensurepath` if the `ytgrab` command is not found.
 python3 -m venv .venv
 source .venv/bin/activate       # Windows: .venv\Scripts\activate
 python -m pip install -e .
-ytgrab
+muxrail
 ```
 
 Run the smoke test with:
@@ -103,18 +103,18 @@ software encoders on Linux and Windows. H.264 is used up to 1080p and HEVC for
 
 ## Privacy
 
-YTGRAB has no analytics, accounts, telemetry, or remote backend of its own.
+MUXRAIL has no analytics, accounts, telemetry, or remote backend of its own.
 Video URLs are passed directly to YouTube through `yt-dlp`, and downloaded files
 stay in the folder you choose.
 
 When browser authentication is enabled, `yt-dlp` reads cookies from the selected
-browser at runtime. YTGRAB does not copy cookies into the project or save them in
+browser at runtime. MUXRAIL does not copy cookies into the project or save them in
 its settings. It stores only the selected browser name in the standard per-user
 configuration directory:
 
-- macOS: `~/Library/Application Support/ytgrab/settings.json`
-- Linux: `${XDG_CONFIG_HOME:-~/.config}/ytgrab/settings.json`
-- Windows: `%APPDATA%\ytgrab\settings.json`
+- macOS: `~/Library/Application Support/muxrail/settings.json`
+- Linux: `${XDG_CONFIG_HOME:-~/.config}/muxrail/settings.json`
+- Windows: `%APPDATA%\muxrail\settings.json`
 
 ## Troubleshooting
 

@@ -8,25 +8,25 @@ from textual.containers import Horizontal
 from textual.widgets import Button, OptionList, ProgressBar, Static
 from textual.widgets.option_list import Option
 
-from ytdl_tui.app import YtgrabApp
+from muxrail.app import MuxRailApp
 
 
-OUTPUT = Path(tempfile.gettempdir()) / "ytgrab-snapshots"
+OUTPUT = Path(tempfile.gettempdir()) / "muxrail-snapshots"
 DEMO_URL = "https://youtu.be/abcdefghijk"
 
 
 async def render() -> None:
     OUTPUT.mkdir(exist_ok=True)
 
-    start_app = YtgrabApp()
+    start_app = MuxRailApp()
     async with start_app.run_test(size=(140, 42), notifications=True) as pilot:
         await pilot.pause()
-        start_app.save_screenshot("ytgrab-start.svg", path=str(OUTPUT))
+        start_app.save_screenshot("muxrail-start.svg", path=str(OUTPUT))
         start_app.query_one("#url").value = DEMO_URL
         await pilot.pause()
         start_app.request_browser_auth(DEMO_URL)
         await pilot.pause()
-        start_app.save_screenshot("ytgrab-auth.svg", path=str(OUTPUT))
+        start_app.save_screenshot("muxrail-auth.svg", path=str(OUTPUT))
         start_app.set_auth_row_visible(False)
         start_app.notify(
             "Could not inspect this YouTube link",
@@ -47,9 +47,9 @@ async def render() -> None:
             timeout=10,
         )
         await pilot.pause(0.2)
-        start_app.save_screenshot("ytgrab-notifications.svg", path=str(OUTPUT))
+        start_app.save_screenshot("muxrail-notifications.svg", path=str(OUTPUT))
 
-    result_app = YtgrabApp()
+    result_app = MuxRailApp()
     async with result_app.run_test(size=(140, 42)) as pilot:
         result_app.query_one("#video-title", Static).update(
             "Example video — a local workflow demo"
@@ -71,7 +71,7 @@ async def render() -> None:
         result_app.query_one("#quality-list", OptionList).highlighted = 0
         result_app.query_one("#quality-list", OptionList).focus()
         await pilot.pause()
-        result_app.save_screenshot("ytgrab-result.svg", path=str(OUTPUT))
+        result_app.save_screenshot("muxrail-result.svg", path=str(OUTPUT))
 
         result_app.query_one("#quality-list", OptionList).display = False
         result_app.query_one("#progress-panel").display = True
@@ -83,7 +83,7 @@ async def render() -> None:
         )
         result_app.query_one("#download", Button).label = "cancel"
         await pilot.pause()
-        result_app.save_screenshot("ytgrab-progress.svg", path=str(OUTPUT))
+        result_app.save_screenshot("muxrail-progress.svg", path=str(OUTPUT))
 
         result_app.query_one("#progress-stage", Static).update("CONVERTING TO HEVC")
         result_app.query_one("#progress-bar", ProgressBar).update(total=100, progress=68.2)
@@ -92,17 +92,17 @@ async def render() -> None:
             "hardware encode  ·  time left 01:24"
         )
         await pilot.pause()
-        result_app.save_screenshot("ytgrab-converting.svg", path=str(OUTPUT))
+        result_app.save_screenshot("muxrail-converting.svg", path=str(OUTPUT))
 
-    compact_app = YtgrabApp()
+    compact_app = MuxRailApp()
     async with compact_app.run_test(size=(60, 42)) as pilot:
         await pilot.pause()
-        compact_app.save_screenshot("ytgrab-compact.svg", path=str(OUTPUT))
+        compact_app.save_screenshot("muxrail-compact.svg", path=str(OUTPUT))
         compact_app.query_one("#url").value = DEMO_URL
         await pilot.pause()
         compact_app.request_browser_auth(DEMO_URL)
         await pilot.pause()
-        compact_app.save_screenshot("ytgrab-compact-auth.svg", path=str(OUTPUT))
+        compact_app.save_screenshot("muxrail-compact-auth.svg", path=str(OUTPUT))
         compact_app.set_auth_row_visible(False)
 
         compact_app.query_one("#video-title", Static).update(
@@ -124,7 +124,7 @@ async def render() -> None:
         compact_app.show_result_window()
         compact_app.query_one("#quality-list", OptionList).focus()
         await pilot.pause()
-        compact_app.save_screenshot("ytgrab-compact-result.svg", path=str(OUTPUT))
+        compact_app.save_screenshot("muxrail-compact-result.svg", path=str(OUTPUT))
 
 
 if __name__ == "__main__":

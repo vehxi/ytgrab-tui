@@ -71,9 +71,9 @@ LOGO_SCAN_FRAMES = tuple(
     for color in ("#707d72", "#8faf76", "#efb84b", "#8faf76")
 )
 STANDARD_HEIGHTS = (2160, 1440, 1080, 720, 480, 360, 240, 144)
-PROGRESS_PREFIX = "YTGRAB_PROGRESS:"
-POSTPROCESS_PREFIX = "YTGRAB_POST:"
-FILE_PREFIX = "YTGRAB_FILE:"
+PROGRESS_PREFIX = "MUXRAIL_PROGRESS:"
+POSTPROCESS_PREFIX = "MUXRAIL_POST:"
+FILE_PREFIX = "MUXRAIL_FILE:"
 ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 FFMPEG_PROGRESS_KEYS = {
     "bitrate",
@@ -102,8 +102,8 @@ BROWSER_LABELS = {
     "edge": "Microsoft Edge",
 }
 
-YTGRAB_DARK_THEME = Theme(
-    name="ytgrab-dark",
+MUXRAIL_DARK_THEME = Theme(
+    name="muxrail-dark",
     primary="#efb84b",
     secondary="#8faf76",
     accent="#efb84b",
@@ -316,26 +316,37 @@ def available_browsers() -> list[str]:
     ]
 
 
-def settings_path() -> Path:
+def configuration_root() -> Path:
     system = platform.system()
     if system == "Darwin":
-        root = Path.home() / "Library" / "Application Support"
+        return Path.home() / "Library" / "Application Support"
     elif system == "Windows" and os.environ.get("APPDATA"):
-        root = Path(os.environ["APPDATA"])
-    else:
-        root = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
-    return root / "ytgrab" / "settings.json"
+        return Path(os.environ["APPDATA"])
+    return Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+
+
+def settings_path() -> Path:
+    return configuration_root() / "muxrail" / "settings.json"
+
+
+def legacy_settings_path() -> Path:
+    """Return the pre-MuxRail settings location for a seamless rename."""
+    return configuration_root() / "ytgrab" / "settings.json"
 
 
 def load_cookie_browser(path: Path | None = None) -> str | None:
-    try:
-        data = json.loads((path or settings_path()).read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
-    if not isinstance(data, dict):
-        return None
-    browser = data.get("cookie_browser")
-    return browser if browser in BROWSER_LABELS else None
+    candidates = (path,) if path is not None else (settings_path(), legacy_settings_path())
+    for candidate in candidates:
+        try:
+            data = json.loads(candidate.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(data, dict):
+            continue
+        browser = data.get("cookie_browser")
+        if browser in BROWSER_LABELS:
+            return browser
+    return None
 
 
 def save_cookie_browser(browser: str | None, path: Path | None = None) -> None:
@@ -455,11 +466,11 @@ def process_group_options() -> dict[str, int | bool]:
     return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
 
 
-class YtgrabApp(App[None]):
-    """YTGRAB — a focused local YouTube transfer utility."""
+class MuxRailApp(App[None]):
+    """MUXRAIL — a focused local YouTube transfer utility."""
 
     CSS_PATH = "styles.tcss"
-    TITLE = "YTGRAB"
+    TITLE = "MUXRAIL"
     SUB_TITLE = "youtube downloader"
 
     BINDINGS = [
@@ -495,7 +506,7 @@ class YtgrabApp(App[None]):
             with Horizontal(id="hero"):
                 yield Static(LOGO, id="logo", markup=True)
                 with Vertical(id="hero-copy"):
-                    yield Static("YTGRAB  /  LOCAL TRANSFER", id="tagline")
+                    yield Static("MUXRAIL  /  LOCAL TRANSFER", id="tagline")
                     yield Static(
                         "signal in  ·  media out  ·  nothing uploaded",
                         id="services",
@@ -567,8 +578,8 @@ class YtgrabApp(App[None]):
                 )
 
     def on_mount(self) -> None:
-        self.register_theme(YTGRAB_DARK_THEME)
-        self.theme = YTGRAB_DARK_THEME.name
+        self.register_theme(MUXRAIL_DARK_THEME)
+        self.theme = MUXRAIL_DARK_THEME.name
         self.query_one("#result-window", Vertical).display = False
         self.query_one("#progress-panel", Vertical).display = False
         self.set_auth_row_visible(False)
@@ -898,7 +909,7 @@ class YtgrabApp(App[None]):
         encoder = conversion_encoder(target_codec)
         target_label = "HEVC" if target_codec == "hevc" else "H.264"
         final_path = converted_output_path(path)
-        temporary_path = path.with_name(f".{path.stem}.ytgrab-converting.mp4")
+        temporary_path = path.with_name(f".{path.stem}.muxrail-converting.mp4")
         try:
             temporary_path.unlink(missing_ok=True)
         except OSError as error:
@@ -1185,7 +1196,7 @@ class YtgrabApp(App[None]):
 
 
 def main() -> None:
-    YtgrabApp().run()
+    MuxRailApp().run()
 
 
 if __name__ == "__main__":

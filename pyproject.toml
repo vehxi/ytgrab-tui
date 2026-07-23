@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ytgrab-tui"
+name = "muxrail"
 version = "0.1.0"
 description = "A local YouTube download console built with Textual and yt-dlp"
 readme = "README.md"
@@ -27,10 +27,10 @@ dependencies = [
 ]
 
 [project.scripts]
-ytgrab = "ytdl_tui.app:main"
+muxrail = "muxrail.app:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-ytdl_tui = ["styles.tcss"]
+muxrail = ["styles.tcss"]
