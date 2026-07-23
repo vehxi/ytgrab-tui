@@ -4,7 +4,7 @@ YTGRAB is a keyboard-friendly terminal interface for inspecting and downloading
 YouTube videos with [`yt-dlp`](https://github.com/yt-dlp/yt-dlp). It keeps the
 workflow focused: paste a link, choose a format, and save the result locally.
 
-![YTGRAB start screen](artifacts/ytgrab-start.svg)
+![YTGRAB start screen](artifacts/ytgrab-start.png)
 
 ## Features
 

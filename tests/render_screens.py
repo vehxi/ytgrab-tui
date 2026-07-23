@@ -1,6 +1,7 @@
-"""Generate Textual SVG snapshots for visual review."""
+"""Generate temporary Textual SVG snapshots for visual review."""
 
 import asyncio
+import tempfile
 from pathlib import Path
 
 from textual.containers import Horizontal
@@ -10,7 +11,7 @@ from textual.widgets.option_list import Option
 from ytdl_tui.app import YtgrabApp
 
 
-OUTPUT = Path("artifacts")
+OUTPUT = Path(tempfile.gettempdir()) / "ytgrab-snapshots"
 DEMO_URL = "https://youtu.be/abcdefghijk"
 
 
