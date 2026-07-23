@@ -75,6 +75,20 @@ PROGRESS_PREFIX = "YTGRAB_PROGRESS:"
 POSTPROCESS_PREFIX = "YTGRAB_POST:"
 FILE_PREFIX = "YTGRAB_FILE:"
 ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
+FFMPEG_PROGRESS_KEYS = {
+    "bitrate",
+    "drop_frames",
+    "dup_frames",
+    "fps",
+    "frame",
+    "out_time",
+    "out_time_ms",
+    "out_time_us",
+    "progress",
+    "speed",
+    "stream_0_0_q",
+    "total_size",
+}
 AUTH_ERROR_MARKERS = (
     "sign in to confirm you’re not a bot",
     "sign in to confirm you're not a bot",
@@ -318,6 +332,8 @@ def load_cookie_browser(path: Path | None = None) -> str | None:
         data = json.loads((path or settings_path()).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return None
+    if not isinstance(data, dict):
+        return None
     browser = data.get("cookie_browser")
     return browser if browser in BROWSER_LABELS else None
 
@@ -366,6 +382,13 @@ def quality_options(formats: list[dict], mode: str = "best") -> list[Option]:
     return options
 
 
+def is_multi_video_info(info: object) -> bool:
+    """Return whether yt-dlp described a playlist or another multi-video source."""
+    if not isinstance(info, dict):
+        return False
+    return info.get("_type") in {"playlist", "multi_video"} or "entries" in info
+
+
 def mac_conversion_codec(quality: str) -> str:
     try:
         height = int(quality)
@@ -390,6 +413,26 @@ def format_eta(seconds: float) -> str:
     hours, remainder = divmod(seconds, 3600)
     minutes, secs = divmod(remainder, 60)
     return f"{hours}:{minutes:02d}:{secs:02d}" if hours else f"{minutes:02d}:{secs:02d}"
+
+
+def is_ffmpeg_progress_line(line: str) -> bool:
+    key, separator, _ = line.partition("=")
+    return bool(separator) and key in FFMPEG_PROGRESS_KEYS
+
+
+def converted_output_path(path: Path) -> Path:
+    """Choose an MP4 path without colliding with an existing sibling file."""
+    preferred = path.with_suffix(".mp4")
+    if preferred == path or not preferred.exists():
+        return preferred
+
+    stem = f"{path.stem} [converted]"
+    candidate = path.with_name(f"{stem}.mp4")
+    suffix = 2
+    while candidate.exists():
+        candidate = path.with_name(f"{stem} {suffix}.mp4")
+        suffix += 1
+    return candidate
 
 
 def terminate_process(process: asyncio.subprocess.Process) -> None:
@@ -438,6 +481,7 @@ class YtgrabApp(App[None]):
     is_downloading = False
     downloaded_file: Path | None = None
     cookie_browser: str | None = None
+    inspect_process: asyncio.subprocess.Process | None = None
 
     def compose(self) -> ComposeResult:
         self.cookie_browser = load_cookie_browser()
@@ -532,6 +576,7 @@ class YtgrabApp(App[None]):
         self.logo_timer = self.set_interval(0.18, self.animate_logo, pause=True)
         self.inspected_url = None
         self.download_process = None
+        self.inspect_process = None
         self.download_cancel_requested = False
         self.is_downloading = False
         self.downloaded_file = None
@@ -852,7 +897,7 @@ class YtgrabApp(App[None]):
         target_codec = mac_conversion_codec(quality)
         encoder = conversion_encoder(target_codec)
         target_label = "HEVC" if target_codec == "hevc" else "H.264"
-        final_path = path.with_suffix(".mp4")
+        final_path = converted_output_path(path)
         temporary_path = path.with_name(f".{path.stem}.ytgrab-converting.mp4")
         try:
             temporary_path.unlink(missing_ok=True)
@@ -918,11 +963,11 @@ class YtgrabApp(App[None]):
         self.download_process = process
 
         assert process.stdout is not None
-        last_output = "ffmpeg conversion failed"
+        last_error_output = "ffmpeg conversion failed"
         while line_bytes := await process.stdout.readline():
             line = line_bytes.decode("utf-8", errors="replace").strip()
-            if line:
-                last_output = line
+            if line and not is_ffmpeg_progress_line(line):
+                last_error_output = line
             if not line.startswith(("out_time_us=", "out_time_ms=")) or duration <= 0:
                 continue
             try:
@@ -946,10 +991,22 @@ class YtgrabApp(App[None]):
             return None
         if return_code != 0:
             temporary_path.unlink(missing_ok=True)
-            return last_output
+            return last_error_output
         try:
-            os.replace(temporary_path, final_path)
-            if final_path != path:
+            if final_path == path:
+                os.replace(temporary_path, final_path)
+            else:
+                reservation = os.open(
+                    final_path,
+                    os.O_CREAT | os.O_EXCL | os.O_WRONLY,
+                    0o666,
+                )
+                os.close(reservation)
+                try:
+                    os.replace(temporary_path, final_path)
+                except OSError:
+                    final_path.unlink(missing_ok=True)
+                    raise
                 path.unlink(missing_ok=True)
         except OSError as error:
             temporary_path.unlink(missing_ok=True)
@@ -1033,22 +1090,40 @@ class YtgrabApp(App[None]):
         self.set_loading(True)
         self.query_one("#status-line", Static).update("inspecting link  ·  yt-dlp")
 
-        process = await asyncio.create_subprocess_exec(
-            *build_inspect_command(url, self.cookie_browser),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *build_inspect_command(url, self.cookie_browser),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                **process_group_options(),
+            )
+        except OSError as error:
+            self.show_error(f"Could not start yt-dlp: {error}")
+            return
+        self.inspect_process = process
 
         try:
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=35)
-        except TimeoutError:
-            process.kill()
-            await process.wait()
-            if self.query_one("#url", Input).value.strip() == url:
-                self.show_error("YouTube did not respond within 35 seconds")
-            else:
-                self.set_loading(False)
-            return
+            try:
+                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=35)
+            except TimeoutError:
+                process.kill()
+                await process.wait()
+                if self.query_one("#url", Input).value.strip() == url:
+                    self.show_error("YouTube did not respond within 35 seconds")
+                else:
+                    self.set_loading(False)
+                return
+        except asyncio.CancelledError:
+            terminate_process(process)
+            try:
+                await asyncio.wait_for(process.wait(), timeout=3)
+            except TimeoutError:
+                process.kill()
+                await process.wait()
+            raise
+        finally:
+            if self.inspect_process is process:
+                self.inspect_process = None
 
         if self.query_one("#url", Input).value.strip() != url:
             self.set_loading(False)
@@ -1067,6 +1142,12 @@ class YtgrabApp(App[None]):
             info = json.loads(stdout)
         except json.JSONDecodeError:
             self.show_error("yt-dlp returned an unexpected response")
+            return
+        if not isinstance(info, dict):
+            self.show_error("yt-dlp returned an unexpected response")
+            return
+        if is_multi_video_info(info):
+            self.show_error("Paste a single video URL, not a playlist or channel")
             return
 
         formats = info.get("formats") or []
@@ -1098,9 +1179,9 @@ class YtgrabApp(App[None]):
         self.notify("Inspection failed", severity="error")
 
     def on_unmount(self) -> None:
-        process = self.download_process
-        if process is not None:
-            terminate_process(process)
+        for process in (self.download_process, self.inspect_process):
+            if process is not None:
+                terminate_process(process)
 
 
 def main() -> None:

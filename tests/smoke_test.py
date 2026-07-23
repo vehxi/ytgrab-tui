@@ -1,5 +1,8 @@
 import asyncio
+import sys
+import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 from ytdl_tui.app import (
     YtgrabApp,
@@ -7,7 +10,10 @@ from ytdl_tui.app import (
     build_download_command,
     build_inspect_command,
     conversion_encoder,
+    converted_output_path,
     is_authentication_error,
+    is_ffmpeg_progress_line,
+    is_multi_video_info,
     is_youtube_url,
     load_cookie_browser,
     mac_conversion_codec,
@@ -17,6 +23,7 @@ from ytdl_tui.app import (
     save_cookie_browser,
 )
 from textual.containers import Horizontal, Vertical
+from textual.worker import WorkerCancelled
 from textual.widgets import Button, Input, OptionList
 
 
@@ -63,10 +70,35 @@ async def smoke_test() -> None:
     assert is_authentication_error("Sign in to confirm you’re not a bot")
     assert browser_cookie_args("chrome") == ["--cookies-from-browser", "chrome"]
     assert browser_cookie_args(None) == []
+    assert is_multi_video_info({"_type": "playlist", "entries": []})
+    assert is_multi_video_info({"entries": [{"id": "video"}]})
+    assert not is_multi_video_info({"id": "video", "formats": []})
+    assert is_ffmpeg_progress_line("out_time_us=1250000")
+    assert is_ffmpeg_progress_line("progress=end")
+    assert not is_ffmpeg_progress_line(
+        "[h264_videotoolbox] Cannot create compression session"
+    )
 
-    settings_file = Path("/tmp/ytgrab-smoke-settings.json")
-    save_cookie_browser("firefox", settings_file)
-    assert load_cookie_browser(settings_file) == "firefox"
+    with tempfile.TemporaryDirectory(prefix="ytgrab-smoke-") as temporary:
+        temporary_dir = Path(temporary)
+        settings_file = temporary_dir / "settings.json"
+        save_cookie_browser("firefox", settings_file)
+        assert load_cookie_browser(settings_file) == "firefox"
+        for invalid_settings in ("[]", '"chrome"', "42", "null"):
+            settings_file.write_text(invalid_settings, encoding="utf-8")
+            assert load_cookie_browser(settings_file) is None
+
+        source_file = temporary_dir / "video.webm"
+        source_file.touch()
+        assert converted_output_path(source_file) == temporary_dir / "video.mp4"
+        (temporary_dir / "video.mp4").touch()
+        assert converted_output_path(source_file) == (
+            temporary_dir / "video [converted].mp4"
+        )
+        (temporary_dir / "video [converted].mp4").touch()
+        assert converted_output_path(source_file) == (
+            temporary_dir / "video [converted] 2.mp4"
+        )
 
     video_command = build_download_command(
         "https://youtu.be/dQw4w9WgXcQ", "720", Path("/tmp/downloads")
@@ -134,6 +166,31 @@ async def smoke_test() -> None:
 
         url.value = "https://youtu.be/dQw4w9WgXcQ"
         await pilot.pause()
+        with patch(
+            "ytdl_tui.app.asyncio.create_subprocess_exec",
+            side_effect=OSError("resource unavailable"),
+        ):
+            worker = app.inspect_video(url.value)
+            await worker.wait()
+        assert not inspect.disabled
+        with patch(
+            "ytdl_tui.app.build_inspect_command",
+            return_value=[sys.executable, "-c", "import time; time.sleep(30)"],
+        ):
+            worker = app.inspect_video(url.value)
+            for _ in range(20):
+                await pilot.pause(0.01)
+                if app.inspect_process is not None:
+                    break
+            inspect_process = app.inspect_process
+            assert inspect_process is not None
+            worker.cancel()
+            try:
+                await worker.wait()
+            except WorkerCancelled:
+                pass
+            assert inspect_process.returncode is not None
+            assert app.inspect_process is None
         app.request_browser_auth(url.value)
         assert app.query_one("#auth-row", Horizontal).display
         assert app.screen.has_class("auth-required")
