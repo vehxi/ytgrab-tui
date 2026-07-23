@@ -1,0 +1,31 @@
+.DS_Store
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+.coverage
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+cookies.txt
+*.cookies
+settings.json
+
+# Editors and local logs
+.idea/
+.vscode/
+*.log
+
+# yt-dlp output and partial downloads
+*.part
+*.ytdl
+*.mp3
+*.m4a
+*.mp4
+*.mkv
+*.webm

@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ytgrab-tui"
+version = "0.1.0"
+description = "A local YouTube download console built with Textual and yt-dlp"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+keywords = ["youtube", "yt-dlp", "textual", "tui", "downloader"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: MacOS",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Topic :: Multimedia :: Video",
+]
+dependencies = [
+  "textual>=8.2.8,<9",
+  "yt-dlp[default]>=2026.7.4",
+]
+
+[project.scripts]
+ytgrab = "ytdl_tui.app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+ytdl_tui = ["styles.tcss"]

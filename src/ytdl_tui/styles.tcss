@@ -1,0 +1,513 @@
+$k-canvas: #0c100d;
+$k-surface: #141a16;
+$k-active: #202820;
+$k-text: #e5eadf;
+$k-muted: #707d72;
+$k-line: #344038;
+$k-focus: #efb84b;
+$k-accent: #efb84b;
+$k-signal: #8faf76;
+$k-ink: #0c100d;
+
+Screen {
+    align-horizontal: center;
+    background: $k-canvas;
+    color: $k-text;
+}
+
+#page {
+    width: 92%;
+    max-width: 120;
+    height: 100%;
+    background: $k-canvas;
+    align-horizontal: center;
+    scrollbar-size: 1 1;
+    scrollbar-color: $k-line;
+    scrollbar-background: $k-canvas;
+}
+
+#hero {
+    width: 100%;
+    max-width: 104;
+    height: 11;
+    align: center middle;
+}
+
+#logo {
+    width: 24;
+    height: 8;
+    color: $k-accent;
+    text-align: center;
+    content-align: center middle;
+    text-style: bold;
+}
+
+#hero-copy {
+    width: 52;
+    height: 5;
+    padding-top: 1;
+}
+
+#tagline {
+    width: 100%;
+    height: 2;
+    color: $k-signal;
+    text-align: left;
+    text-style: bold;
+}
+
+#services {
+    width: 100%;
+    height: 2;
+    color: $k-muted;
+    text-align: left;
+}
+
+#system-badge {
+    width: 22;
+    height: 3;
+    color: $k-signal;
+    text-align: right;
+    content-align: right middle;
+}
+
+#transfer-form {
+    width: 100%;
+    height: 10;
+    align-horizontal: center;
+}
+
+#auth-row {
+    width: 100%;
+    height: 3;
+    align: center middle;
+}
+
+#auth-label {
+    width: 13;
+    height: 1;
+    color: $k-accent;
+    text-align: right;
+    margin-right: 1;
+    text-style: bold;
+}
+
+#auth-browser {
+    width: 1fr;
+    height: 3;
+}
+
+#auth-browser > SelectCurrent {
+    background: $k-surface;
+    color: $k-text;
+    border: tall $k-focus;
+}
+
+Screen.auth-required #transfer-form,
+Screen.auth-required #source-window {
+    height: 13;
+}
+
+#source-window,
+#result-window {
+    width: 100%;
+    max-width: 104;
+    align-horizontal: center;
+}
+
+#source-window {
+    height: 10;
+}
+
+#result-window {
+    height: 19;
+}
+
+#url-label,
+.micro-label {
+    color: $k-accent;
+    text-style: bold;
+}
+
+#url-label {
+    width: 100%;
+    height: 1;
+    padding-left: 2;
+}
+
+#url-bar {
+    width: 100%;
+    height: 3;
+}
+
+#url {
+    width: 1fr;
+    height: 3;
+    background: $k-surface;
+    color: $k-text;
+    border: tall $k-line;
+    padding: 0 1;
+}
+
+#url:focus {
+    background: $k-active;
+    border: tall $k-focus;
+}
+
+#url > .input--placeholder {
+    color: $k-muted;
+}
+
+#url > .input--cursor,
+#output-path > .input--cursor {
+    background: $k-focus;
+    color: $k-canvas;
+}
+
+#url > .input--selection,
+#output-path > .input--selection {
+    background: $k-active;
+    color: $k-text;
+}
+
+Button {
+    height: 3;
+    padding: 0;
+    content-align: center middle;
+    border: none;
+    background: $k-text;
+    color: $k-ink;
+    text-style: bold;
+}
+
+Button:hover,
+Button:focus {
+    background: $k-focus;
+    color: $k-ink;
+    text-style: bold;
+}
+
+Button:focus {
+    border: tall $k-accent;
+}
+
+Button:disabled {
+    background: $k-active;
+    color: $k-muted;
+    text-style: none;
+}
+
+Toast {
+    background: $k-surface;
+    color: $k-text;
+    border: tall $k-line;
+}
+
+Toast.-information {
+    background: #172019;
+    color: $k-signal;
+    border: tall #526c4b;
+}
+
+Toast.-warning {
+    background: #281f13;
+    color: #e8aa5b;
+    border: tall #9f7030;
+}
+
+Toast.-error {
+    background: #291716;
+    color: #e57066;
+    border: tall #98443f;
+}
+
+Toast .toast--title {
+    color: $k-text;
+}
+
+Toast.-information .toast--title {
+    color: $k-signal;
+}
+
+Toast.-warning .toast--title {
+    color: #e8aa5b;
+}
+
+Toast.-error .toast--title {
+    color: #e57066;
+}
+
+#inspect {
+    width: 18;
+    margin-left: 1;
+}
+
+#output-row {
+    width: 100%;
+    height: 3;
+    align: center middle;
+}
+
+#output-label {
+    width: 13;
+    height: 1;
+    color: $k-muted;
+    text-align: right;
+    margin-right: 1;
+}
+
+#output-path {
+    width: 1fr;
+    height: 1;
+    padding: 0;
+    background: $k-canvas;
+    color: $k-muted;
+    border: none;
+}
+
+#output-path:focus {
+    background: $k-active;
+    color: $k-text;
+}
+
+#status-line,
+#result-hints {
+    width: 100%;
+    height: 2;
+    color: $k-muted;
+    text-align: center;
+    padding-left: 0;
+}
+
+#result {
+    width: 100%;
+    height: 16;
+    margin-top: 0;
+    layout: horizontal;
+}
+
+#video-info {
+    width: 1fr;
+    height: 100%;
+    padding: 2 1 1 4;
+}
+
+.micro-label {
+    height: 2;
+    color: $k-muted;
+}
+
+.section-label {
+    color: $k-accent;
+}
+
+#video-title {
+    width: 100%;
+    height: auto;
+    max-height: 5;
+    color: $k-text;
+    text-style: bold;
+}
+
+#video-meta {
+    width: 100%;
+    height: 3;
+    margin-top: 2;
+    color: $k-muted;
+}
+
+#format-panel {
+    width: 52;
+    height: 100%;
+}
+
+#quality-mode {
+    width: 100%;
+    height: 3;
+}
+
+#quality-mode > SelectCurrent {
+    background: $k-canvas;
+    color: $k-text;
+    border: tall $k-line;
+}
+
+#quality-mode:focus > SelectCurrent {
+    border: tall $k-focus;
+}
+
+#quality-list {
+    width: 100%;
+    height: 7;
+    padding: 0 1;
+    background: $k-surface;
+    color: $k-text;
+    border: tall $k-line;
+}
+
+#quality-list:focus {
+    border: tall $k-focus;
+}
+
+#quality-list > .option-list--option-highlighted {
+    background: $k-active;
+    color: $k-accent;
+    text-style: bold;
+}
+
+#quality-list > .option-list--option-hover {
+    background: $k-active;
+}
+
+#progress-panel {
+    width: 100%;
+    height: 10;
+    padding: 1 2;
+    background: $k-surface;
+    border: tall $k-line;
+}
+
+#progress-stage {
+    width: 100%;
+    height: 2;
+    color: $k-text;
+    text-style: bold;
+}
+
+#progress-bar {
+    width: 100%;
+    height: 1;
+    margin-top: 1;
+}
+
+#progress-bar Bar {
+    width: 1fr;
+}
+
+#progress-bar Bar > .bar--bar,
+#progress-bar Bar > .bar--complete {
+    color: $k-accent;
+    background: $k-active;
+}
+
+#progress-percent {
+    width: 100%;
+    height: 1;
+    color: $k-accent;
+    text-style: bold;
+    text-align: right;
+}
+
+#progress-stats {
+    width: 100%;
+    height: 2;
+    color: $k-muted;
+}
+
+#progress-file {
+    width: 100%;
+    height: 2;
+    color: $k-text;
+    text-overflow: ellipsis;
+}
+
+#download {
+    width: 100%;
+    height: 3;
+    align-horizontal: center;
+    margin-top: 1;
+}
+
+#result-hints {
+    margin-top: 1;
+}
+
+Screen.narrow #page {
+    width: 96%;
+}
+
+Screen.narrow #hero {
+    height: 11;
+}
+
+Screen.narrow #system-badge {
+    display: none;
+}
+
+Screen.narrow #result {
+    height: 27;
+    layout: vertical;
+}
+
+Screen.narrow #result-window {
+    height: 30;
+}
+
+Screen.narrow #video-info,
+Screen.narrow #format-panel {
+    width: 100%;
+}
+
+Screen.narrow #video-info {
+    height: 10;
+    padding: 2 1 1 1;
+}
+
+Screen.narrow #format-panel {
+    height: 16;
+}
+
+Screen.compact #services {
+    display: none;
+}
+
+Screen.compact #hero {
+    height: 10;
+}
+
+Screen.compact #logo {
+    width: 22;
+    height: 8;
+}
+
+Screen.compact #hero-copy {
+    width: 30;
+    height: 3;
+    padding-top: 0;
+}
+
+Screen.compact #tagline {
+    height: 1;
+}
+
+Screen.compact #transfer-form {
+    height: 13;
+}
+
+Screen.compact #source-window {
+    height: 13;
+}
+
+Screen.compact.auth-required #transfer-form,
+Screen.compact.auth-required #source-window {
+    height: 16;
+}
+
+Screen.compact #url-bar {
+    height: 6;
+    layout: vertical;
+}
+
+Screen.compact #url,
+Screen.compact #inspect {
+    width: 100%;
+    margin-left: 0;
+}
+
+Screen.compact #output-label {
+    display: none;
+}
+
+Screen.compact #auth-label {
+    display: none;
+}
