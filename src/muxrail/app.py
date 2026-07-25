@@ -339,7 +339,7 @@ def load_cookie_browser(path: Path | None = None) -> str | None:
     for candidate in candidates:
         try:
             data = json.loads(candidate.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
+        except (OSError, UnicodeError, json.JSONDecodeError):
             continue
         if not isinstance(data, dict):
             continue
@@ -415,8 +415,17 @@ def conversion_encoder(codec: str, system: str | None = None) -> str:
     return "libx265" if codec == "hevc" else "libx264"
 
 
-def media_is_mac_compatible(video_codec: str, audio_codec: str | None) -> bool:
-    return video_codec in {"h264", "hevc"} and audio_codec in {None, "aac"}
+def media_is_mac_compatible(
+    video_codec: str,
+    audio_codec: str | None,
+    container: str,
+) -> bool:
+    containers = {item.strip() for item in container.split(",")}
+    return (
+        "mp4" in containers
+        and video_codec in {"h264", "hevc"}
+        and audio_codec in {None, "aac"}
+    )
 
 
 def format_eta(seconds: float) -> str:
@@ -447,15 +456,38 @@ def converted_output_path(path: Path) -> Path:
 
 
 def terminate_process(process: asyncio.subprocess.Process) -> None:
-    """Stop a child process group on POSIX and the child itself on Windows."""
+    """Stop a child process group on POSIX and its process tree on Windows."""
     if process.returncode is not None:
         return
     try:
         if os.name == "posix":
             os.killpg(process.pid, signal.SIGTERM)
         else:
-            process.terminate()
-    except ProcessLookupError:
+            subprocess.run(
+                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+    except OSError:
+        pass
+
+
+def force_kill_process(process: asyncio.subprocess.Process) -> None:
+    """Force-stop a process group that did not exit after graceful cancellation."""
+    if process.returncode is not None:
+        return
+    try:
+        if os.name == "posix":
+            os.killpg(process.pid, signal.SIGKILL)
+        else:
+            subprocess.run(
+                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+    except OSError:
         pass
 
 
@@ -839,13 +871,15 @@ class MuxRailApp(App[None]):
         self.notify("Download failed", severity="error")
 
     def request_download_cancel(self) -> None:
-        process = self.download_process
-        if process is None or process.returncode is not None:
+        if not self.is_downloading:
             return
+        process = self.download_process
         self.download_cancel_requested = True
         self.query_one("#progress-stage", Static).update("STOPPING")
         self.query_one("#download", Button).disabled = True
-        terminate_process(process)
+        if process is not None and process.returncode is None:
+            terminate_process(process)
+            self.set_timer(3, lambda: force_kill_process(process))
 
     def update_download_progress(self, snapshot: ProgressSnapshot) -> None:
         if snapshot.percent is not None:
@@ -858,23 +892,43 @@ class MuxRailApp(App[None]):
 
     async def probe_downloaded_media(
         self, path: Path
-    ) -> tuple[str, str | None, float] | None:
+    ) -> tuple[str, str | None, float, str] | None:
         ffprobe = shutil.which("ffprobe")
         if ffprobe is None:
             return None
-        process = await asyncio.create_subprocess_exec(
-            ffprobe,
-            "-v",
-            "error",
-            "-show_entries",
-            "stream=codec_type,codec_name:format=duration",
-            "-of",
-            "json",
-            str(path),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, _ = await process.communicate()
+        try:
+            process = await asyncio.create_subprocess_exec(
+                ffprobe,
+                "-v",
+                "error",
+                "-show_entries",
+                "stream=codec_type,codec_name:format=duration,format_name",
+                "-of",
+                "json",
+                str(path),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                **process_group_options(),
+            )
+        except OSError:
+            return None
+        self.download_process = process
+        if self.download_cancel_requested:
+            force_kill_process(process)
+        try:
+            try:
+                stdout, _ = await asyncio.wait_for(process.communicate(), timeout=15)
+            except TimeoutError:
+                terminate_process(process)
+                try:
+                    await asyncio.wait_for(process.wait(), timeout=3)
+                except TimeoutError:
+                    force_kill_process(process)
+                    await process.wait()
+                return None
+        finally:
+            if self.download_process is process:
+                self.download_process = None
         if process.returncode != 0:
             return None
         try:
@@ -888,17 +942,18 @@ class MuxRailApp(App[None]):
                 None,
             )
             duration = float((data.get("format") or {}).get("duration") or 0)
+            container = str((data.get("format") or {})["format_name"])
         except (KeyError, TypeError, ValueError, StopIteration, json.JSONDecodeError):
             return None
-        return video_codec, audio_codec, duration
+        return video_codec, audio_codec, duration, container
 
     async def convert_download_for_mac(self, path: Path, quality: str) -> str | None:
         """Convert incompatible media in-place; return an error message on failure."""
         media = await self.probe_downloaded_media(path)
         if media is None:
             return "ffprobe could not inspect the downloaded file"
-        video_codec, audio_codec, duration = media
-        if media_is_mac_compatible(video_codec, audio_codec):
+        video_codec, audio_codec, duration, container = media
+        if media_is_mac_compatible(video_codec, audio_codec, container):
             return None
 
         ffmpeg = shutil.which("ffmpeg")
@@ -906,7 +961,6 @@ class MuxRailApp(App[None]):
             return "ffmpeg is required for Mac-compatible conversion"
 
         target_codec = mac_conversion_codec(quality)
-        encoder = conversion_encoder(target_codec)
         target_label = "HEVC" if target_codec == "hevc" else "H.264"
         final_path = converted_output_path(path)
         temporary_path = path.with_name(f".{path.stem}.muxrail-converting.mp4")
@@ -915,92 +969,114 @@ class MuxRailApp(App[None]):
         except OSError as error:
             return f"could not prepare conversion: {error}"
 
-        command = [
-            ffmpeg,
-            "-hide_banner",
-            "-loglevel",
-            "error",
-            "-y",
-            "-i",
-            str(path),
-            "-map",
-            "0:v:0",
-            "-map",
-            "0:a?",
-            "-map_metadata",
-            "0",
-            "-c:v",
-            encoder,
-        ]
-        if platform.system() == "Darwin":
-            command.extend(["-allow_sw", "1", "-q:v", "65"])
-        else:
-            command.extend(
-                ["-preset", "medium", "-crf", "24" if target_codec == "hevc" else "20"]
-            )
-        if target_codec == "hevc":
-            command.extend(["-tag:v", "hvc1"])
-        else:
-            command.extend(["-profile:v", "high", "-pix_fmt", "yuv420p"])
-        command.extend(
-            [
-                "-c:a",
-                "aac",
-                "-b:a",
-                "256k",
-                "-movflags",
-                "+faststart",
-                "-progress",
-                "pipe:1",
-                "-nostats",
-                str(temporary_path),
-            ]
-        )
-
         self.query_one("#progress-stage", Static).update(f"CONVERTING TO {target_label}")
         self.query_one("#progress-bar", ProgressBar).update(total=100, progress=0)
         self.query_one("#progress-percent", Static).update("0%")
         self.query_one("#progress-file", Static).update(path.name)
-        started_at = time.monotonic()
-        try:
-            process = await asyncio.create_subprocess_exec(
-                *command,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
-                **process_group_options(),
-            )
-        except OSError as error:
-            return f"could not start ffmpeg: {error}"
-        self.download_process = process
-
-        assert process.stdout is not None
         last_error_output = "ffmpeg conversion failed"
-        while line_bytes := await process.stdout.readline():
-            line = line_bytes.decode("utf-8", errors="replace").strip()
-            if line and not is_ffmpeg_progress_line(line):
-                last_error_output = line
-            if not line.startswith(("out_time_us=", "out_time_ms=")) or duration <= 0:
-                continue
-            try:
-                current_seconds = int(line.partition("=")[2]) / 1_000_000
-            except ValueError:
-                continue
-            percent = max(0.0, min(current_seconds / duration * 100, 100.0))
-            elapsed = time.monotonic() - started_at
-            remaining = elapsed * (100 - percent) / percent if percent > 0 else 0
-            self.query_one("#progress-bar", ProgressBar).update(total=100, progress=percent)
-            self.query_one("#progress-percent", Static).update(f"{percent:.1f}%")
-            eta = format_eta(remaining) if percent > 0 else "—"
-            self.query_one("#progress-stats", Static).update(
-                f"hardware encode  ·  time left {eta}"
-            )
+        system = platform.system()
+        attempts = [(conversion_encoder(target_codec), system == "Darwin")]
+        if system == "Darwin":
+            attempts.append((conversion_encoder(target_codec, "Linux"), False))
 
-        return_code = await process.wait()
-        self.download_process = None
-        if self.download_cancel_requested:
-            temporary_path.unlink(missing_ok=True)
-            return None
-        if return_code != 0:
+        for attempt, (encoder, hardware) in enumerate(attempts):
+            if self.download_cancel_requested:
+                temporary_path.unlink(missing_ok=True)
+                return None
+            if attempt:
+                temporary_path.unlink(missing_ok=True)
+                self.query_one("#progress-stage", Static).update(
+                    f"RETRYING {target_label} WITH SOFTWARE"
+                )
+                self.query_one("#progress-bar", ProgressBar).update(total=100, progress=0)
+                self.query_one("#progress-percent", Static).update("0%")
+            command = [
+                ffmpeg,
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-i",
+                str(path),
+                "-map",
+                "0:v:0",
+                "-map",
+                "0:a?",
+                "-map_metadata",
+                "0",
+                "-c:v",
+                encoder,
+            ]
+            if hardware:
+                command.extend(["-allow_sw", "1", "-q:v", "65"])
+            else:
+                command.extend(
+                    ["-preset", "medium", "-crf", "24" if target_codec == "hevc" else "20"]
+                )
+            if target_codec == "hevc":
+                command.extend(["-tag:v", "hvc1"])
+            else:
+                command.extend(["-profile:v", "high", "-pix_fmt", "yuv420p"])
+            command.extend(
+                [
+                    "-c:a",
+                    "aac",
+                    "-b:a",
+                    "256k",
+                    "-movflags",
+                    "+faststart",
+                    "-progress",
+                    "pipe:1",
+                    "-nostats",
+                    str(temporary_path),
+                ]
+            )
+            started_at = time.monotonic()
+            try:
+                process = await asyncio.create_subprocess_exec(
+                    *command,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.STDOUT,
+                    **process_group_options(),
+                )
+            except OSError as error:
+                return f"could not start ffmpeg: {error}"
+            self.download_process = process
+            if self.download_cancel_requested:
+                force_kill_process(process)
+
+            assert process.stdout is not None
+            while line_bytes := await process.stdout.readline():
+                line = line_bytes.decode("utf-8", errors="replace").strip()
+                if line and not is_ffmpeg_progress_line(line):
+                    last_error_output = line
+                if not line.startswith(("out_time_us=", "out_time_ms=")) or duration <= 0:
+                    continue
+                try:
+                    current_seconds = int(line.partition("=")[2]) / 1_000_000
+                except ValueError:
+                    continue
+                percent = max(0.0, min(current_seconds / duration * 100, 100.0))
+                elapsed = time.monotonic() - started_at
+                remaining = elapsed * (100 - percent) / percent if percent > 0 else 0
+                self.query_one("#progress-bar", ProgressBar).update(
+                    total=100, progress=percent
+                )
+                self.query_one("#progress-percent", Static).update(f"{percent:.1f}%")
+                eta = format_eta(remaining) if percent > 0 else "—"
+                encode_kind = "hardware" if hardware else "software"
+                self.query_one("#progress-stats", Static).update(
+                    f"{encode_kind} encode  ·  time left {eta}"
+                )
+
+            return_code = await process.wait()
+            self.download_process = None
+            if self.download_cancel_requested:
+                temporary_path.unlink(missing_ok=True)
+                return None
+            if return_code == 0:
+                break
+        else:
             temporary_path.unlink(missing_ok=True)
             return last_error_output
         try:
@@ -1042,6 +1118,8 @@ class MuxRailApp(App[None]):
             self.finish_download_error(str(error))
             return
         self.download_process = process
+        if self.download_cancel_requested:
+            force_kill_process(process)
         last_error = "yt-dlp could not download the file"
 
         assert process.stdout is not None
@@ -1117,7 +1195,7 @@ class MuxRailApp(App[None]):
             try:
                 stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=35)
             except TimeoutError:
-                process.kill()
+                force_kill_process(process)
                 await process.wait()
                 if self.query_one("#url", Input).value.strip() == url:
                     self.show_error("YouTube did not respond within 35 seconds")
@@ -1129,7 +1207,7 @@ class MuxRailApp(App[None]):
             try:
                 await asyncio.wait_for(process.wait(), timeout=3)
             except TimeoutError:
-                process.kill()
+                force_kill_process(process)
                 await process.wait()
             raise
         finally:
@@ -1192,7 +1270,7 @@ class MuxRailApp(App[None]):
     def on_unmount(self) -> None:
         for process in (self.download_process, self.inspect_process):
             if process is not None:
-                terminate_process(process)
+                force_kill_process(process)
 
 
 def main() -> None:

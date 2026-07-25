@@ -11,6 +11,7 @@ from muxrail.app import (
     build_inspect_command,
     conversion_encoder,
     converted_output_path,
+    force_kill_process,
     is_authentication_error,
     is_ffmpeg_progress_line,
     is_multi_video_info,
@@ -51,9 +52,23 @@ async def smoke_test() -> None:
     assert mac_conversion_codec("2160") == "hevc"
     assert conversion_encoder("h264", "Darwin") == "h264_videotoolbox"
     assert conversion_encoder("hevc", "Linux") == "libx265"
-    assert media_is_mac_compatible("h264", "aac")
-    assert media_is_mac_compatible("hevc", "aac")
-    assert not media_is_mac_compatible("vp9", "opus")
+    assert media_is_mac_compatible("h264", "aac", "mov,mp4,m4a,3gp,3g2,mj2")
+    assert media_is_mac_compatible("hevc", "aac", "mp4")
+    assert not media_is_mac_compatible("h264", "aac", "matroska,webm")
+    assert not media_is_mac_compatible("vp9", "opus", "mp4")
+    process = type("RunningProcess", (), {"returncode": None, "pid": 4321})()
+    with (
+        patch("muxrail.app.os.name", "nt"),
+        patch("muxrail.app.subprocess.run") as taskkill,
+    ):
+        force_kill_process(process)
+    assert taskkill.call_args.args[0] == [
+        "taskkill",
+        "/PID",
+        "4321",
+        "/T",
+        "/F",
+    ]
 
     snapshot = parse_progress_line("MUXRAIL_PROGRESS: 42.5%| 8.2MiB/s|00:13")
     assert snapshot is not None
@@ -87,6 +102,8 @@ async def smoke_test() -> None:
         for invalid_settings in ("[]", '"chrome"', "42", "null"):
             settings_file.write_text(invalid_settings, encoding="utf-8")
             assert load_cookie_browser(settings_file) is None
+        settings_file.write_bytes(b"\xff\xfe")
+        assert load_cookie_browser(settings_file) is None
 
         source_file = temporary_dir / "video.webm"
         source_file.touch()
@@ -199,9 +216,50 @@ async def smoke_test() -> None:
         assert app.is_downloading
         assert app.query_one("#progress-panel", Vertical).display
         assert not app.query_one("#quality-list", OptionList).display
+        app.download_process = type("FinishedProcess", (), {"returncode": 0})()
+        app.request_download_cancel()
+        assert app.download_cancel_requested
+        assert str(app.query_one("#progress-stage").render()) == "STOPPING"
         app.finish_download_cancelled()
         assert not app.is_downloading
         assert app.query_one("#quality-list", OptionList).display
+
+        real_create_subprocess = asyncio.create_subprocess_exec
+        subprocess_starting = asyncio.Event()
+        allow_subprocess_start = asyncio.Event()
+
+        async def delayed_create_subprocess(*args, **kwargs):
+            subprocess_starting.set()
+            await allow_subprocess_start.wait()
+            return await real_create_subprocess(
+                sys.executable,
+                "-c",
+                "import time; time.sleep(30)",
+                stdout=kwargs.get("stdout"),
+                stderr=kwargs.get("stderr"),
+                **{
+                    key: value
+                    for key, value in kwargs.items()
+                    if key not in {"stdout", "stderr"}
+                },
+            )
+
+        with patch(
+            "muxrail.app.asyncio.create_subprocess_exec",
+            side_effect=delayed_create_subprocess,
+        ):
+            worker = app.download_video(
+                "https://youtu.be/dQw4w9WgXcQ",
+                "720",
+                Path(tempfile.gettempdir()),
+            )
+            await asyncio.wait_for(subprocess_starting.wait(), timeout=1)
+            app.request_download_cancel()
+            allow_subprocess_start.set()
+            await worker.wait()
+        assert not app.is_downloading
+        assert app.download_process is None
+
         app.show_result_window()
         assert not app.query_one("#source-window", Vertical).display
         assert app.query_one("#result-window", Vertical).display
